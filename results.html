@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Class Results · Gen Z Quiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="app wide">
+  <div class="head">
+    <div>
+      <span class="tag" id="courseTag"></span>
+      <h1 style="margin-bottom:6px">Our class, <span class="hl">live</span></h1>
+      <span class="live"><span class="dot"></span><span id="status">connecting…</span></span>
+    </div>
+    <div style="text-align:center">
+      <img id="qr" class="qr" alt="QR code to open the quiz">
+      <p class="note" style="margin-top:6px">Scan to take the quiz</p>
+    </div>
+  </div>
+
+  <div class="grid4">
+    <div class="stat"><b id="sAge">–</b><span>average mind age</span></div>
+    <div class="stat"><b id="sOver">–</b><span>overthink a lot or constantly</span></div>
+    <div class="stat"><b id="sJoke">–</b><span>say serious things as a joke (often/always)</span></div>
+    <div class="stat"><b id="sStub">–</b><span>say we're not stubborn, we want to be heard</span></div>
+  </div>
+
+  <div class="grid2" id="charts"></div>
+  <p class="note" id="credits"></p>
+</main>
+
+<script src="config.js"></script>
+<script src="questions.js"></script>
+<script src="stats.js"></script>
+<script>
+  const C = window.GENZ_CONFIG;
+  document.getElementById("courseTag").textContent = C.COURSE + " · " + C.DOCTOR;
+  document.getElementById("credits").textContent = "Made by " + C.TEAM.join(", ");
+
+  // QR code pointing to the quiz (same folder as this page).
+  const quizUrl = location.href.replace(/results\.html.*$/, "");
+  document.getElementById("qr").src =
+    "https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=" + encodeURIComponent(quizUrl);
+
+  const DEMO = new URLSearchParams(location.search).has("demo");
+  const SHOW = ["gen", "heard", "misunderstood", "care"];   // which questions get a bar chart
+  const TITLES = { gen: "When were you born?", heard: "Do you feel heard by older generations?",
+                   misunderstood: "What do they misunderstand most about us?", care: "How we show we care" };
+
+  function bars(qid, counts) {
+    const q = QUESTIONS.find(x => x.id === qid);
+    const total = counts.reduce((a, b) => a + b, 0) || 1;
+    const max = Math.max(...counts);
+    return `<div class="card"><h3>${TITLES[qid]}</h3>` + q.options.map((o, i) => {
+      const p = Math.round(counts[i] / total * 100);
+      return `<div class="rowbar ${counts[i] === max && max > 0 ? "best" : ""}">
+        <div class="lab"><span>${o.t}</span><b>${p}%</b></div>
+        <div class="track"><div class="fill" style="width:${p}%"></div></div></div>`;
+    }).join("") + "</div>";
+  }
+
+  function render(rows) {
+    if (!rows) { document.getElementById("status").textContent = "not connected: add API_URL in config.js (or open with ?demo=1)"; return; }
+    const s = summarize(rows);
+    document.getElementById("status").textContent = s.n + " answers · updates every 5 s" + (DEMO ? " · DEMO DATA" : "");
+    document.getElementById("sAge").textContent = s.n ? s.avgAge : "–";
+    document.getElementById("sOver").textContent = s.overthink + "%";
+    document.getElementById("sJoke").textContent = s.joke + "%";
+    document.getElementById("sStub").textContent = s.notStubborn + "%";
+    document.getElementById("charts").innerHTML =
+      SHOW.map(id => bars(id, s.counts[QUESTIONS.findIndex(q => q.id === id)])).join("");
+  }
+
+  const demo = DEMO ? demoRows() : null;
+  function tick() { (DEMO ? Promise.resolve(demo) : loadRows()).then(render); }
+  tick();
+  if (!DEMO) setInterval(tick, 5000);
+</script>
+</body>
+</html>

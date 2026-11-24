@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What's Your Mind Age? · Gen Z Quiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="app">
+
+  <!-- 1. Welcome screen -->
+  <section id="intro" class="screen active">
+    <span class="tag" id="courseTag"></span>
+    <h1>What's your <span class="hl">mind age</span>?</h1>
+    <p class="lead">12 quick questions. No right answers, fully anonymous.
+      Your answers join the class results we'll reveal at the end of the presentation.</p>
+    <button id="start" class="btn">Let's go →</button>
+    <p class="credits" id="credits"></p>
+  </section>
+
+  <!-- 2. Question screen (reused for every question) -->
+  <section id="quiz" class="screen">
+    <div class="top">
+      <button id="back" class="ghost" aria-label="Previous question">←</button>
+      <div class="bar"><div id="progress"></div></div>
+      <span id="count"></span>
+    </div>
+    <h2 id="qText"></h2>
+    <div id="options" class="options"></div>
+  </section>
+
+  <!-- 3. Result screen -->
+  <section id="result" class="screen">
+    <span class="tag">Your mind age is</span>
+    <div class="big" id="age"></div>
+    <h1 id="label" style="font-size:32px;margin-top:10px"></h1>
+    <p class="lead" id="labelLine"></p>
+
+    <div class="card">
+      <h3 id="genName"></h3>
+      <p id="genDesc"></p>
+    </div>
+
+    <h2 style="margin-bottom:4px">The class so far</h2>
+    <div id="classBox"><p class="note">Loading class results…</p></div>
+    <button class="btn alt" onclick="location.href='results.html'">See full class results</button>
+  </section>
+
+</main>
+
+<script src="config.js"></script>
+<script src="questions.js"></script>
+<script src="stats.js"></script>
+<script>
+  const C = window.GENZ_CONFIG;
+  document.getElementById("courseTag").textContent = C.COURSE + " · " + C.DOCTOR;
+  document.getElementById("credits").textContent = "Made by " + C.TEAM.join(", ");
+
+  const answers = new Array(QUESTIONS.length).fill(null);
+  let current = 0;
+
+  function show(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    window.scrollTo(0, 0);
+  }
+
+  function renderQuestion() {
+    const q = QUESTIONS[current];
+    document.getElementById("qText").textContent = q.q;
+    document.getElementById("count").textContent = (current + 1) + "/" + QUESTIONS.length;
+    document.getElementById("progress").style.width = (current / QUESTIONS.length * 100) + "%";
+    const box = document.getElementById("options");
+    box.innerHTML = "";
+    q.options.forEach((opt, i) => {
+      const b = document.createElement("button");
+      b.className = "opt" + (answers[current] === i ? " picked" : "");
+      b.textContent = opt.t;
+      b.onclick = () => pick(i, b);
+      box.appendChild(b);
+    });
+  }
+
+  function pick(i, btn) {
+    answers[current] = i;
+    btn.classList.add("picked");
+    setTimeout(() => {            // small pause so you see your pick
+      current++;
+      current < QUESTIONS.length ? renderQuestion() : finish();
+    }, 220);
+  }
+
+  document.getElementById("start").onclick = () => { show("quiz"); renderQuestion(); };
+  document.getElementById("back").onclick = () => {
+    if (current > 0) { current--; renderQuestion(); } else show("intro");
+  };
+
+  function finish() {
+    const age = computeMindAge(answers);
+    const lab = mindAgeLabel(age);
+    const gen = GENS[answers[0]];
+    document.getElementById("age").textContent = age;
+    document.getElementById("label").textContent = lab.emoji + " " + lab.title;
+    document.getElementById("labelLine").textContent = lab.line;
+    document.getElementById("genName").textContent = gen.emoji + " " + gen.name;
+    document.getElementById("genDesc").textContent = gen.desc;
+    show("result");
+
+    // Send once per phone, so a retake doesn't count twice.
+    let already = false;
+    try { already = localStorage.getItem("genz_sent") === "1"; } catch (e) {}
+    const send = already ? Promise.resolve(true)
+      : sendAnswers({ mindAge: age, answers }).then(ok => {
+          try { if (ok) localStorage.setItem("genz_sent", "1"); } catch (e) {}
+          return ok;
+        });
+    send.then(loadRows).then(showClass);
+  }
+
+  function showClass(rows) {
+    const box = document.getElementById("classBox");
+    if (!rows) { box.innerHTML = '<p class="note">Class results aren\'t connected yet.</p>'; return; }
+    const s = summarize(rows);
+    box.innerHTML = `
+      <div class="stats">
+        <div class="stat"><b>${s.avgAge}</b><span>average mind age (${s.n} answers)</span></div>
+        <div class="stat"><b>${s.overthink}%</b><span>overthink a lot or constantly</span></div>
+        <div class="stat"><b>${s.joke}%</b><span>say serious things as a joke</span></div>
+        <div class="stat"><b>${s.heard}%</b><span>usually feel heard by older generations</span></div>
+      </div>`;
+  }
+</script>
+</body>
+</html>
